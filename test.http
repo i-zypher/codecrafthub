@@ -1,0 +1,74 @@
+### Add a course
+POST http://127.0.0.1:5000/api/courses
+Content-Type: application/json
+
+{
+  "name": "Python Basics",
+  "description": "Learn Python fundamentals",
+  "target_date": "2026-12-31",
+  "status": "In Progress"
+}
+
+### Should fail: missing name
+POST http://127.0.0.1:5000/api/courses
+Content-Type: application/json
+
+{
+  "target_date": "2026-12-31"
+}
+
+### Should fail: bad status
+POST http://127.0.0.1:5000/api/courses
+Content-Type: application/json
+
+{
+  "name": "Bad Course",
+  "target_date": "2026-12-31",
+  "status": "Kinda Started"
+}
+
+### Should fail: bad date format
+POST http://127.0.0.1:5000/api/courses
+Content-Type: application/json
+
+{
+  "name": "Bad Date",
+  "target_date": "12/31/2026"
+}
+
+### Get course 1
+GET http://127.0.0.1:5000/api/courses/1
+
+### Get a course that doesn't exist (expect 404)
+GET http://127.0.0.1:5000/api/courses/999
+
+### Update course 1
+PUT http://127.0.0.1:5000/api/courses/1
+Content-Type: application/json
+
+{
+  "status": "Completed"
+}
+
+### Update with bad status (expect 400)
+PUT http://127.0.0.1:5000/api/courses/1
+Content-Type: application/json
+
+{
+  "status": "Done-ish"
+}
+
+### Add a throwaway course to delete
+POST http://127.0.0.1:5000/api/courses
+Content-Type: application/json
+
+{
+  "name": "Delete Me",
+  "target_date": "2026-10-31"
+}
+
+### Delete course 2
+DELETE http://127.0.0.1:5000/api/courses/2
+
+### Delete it again (expect 404)
+DELETE http://127.0.0.1:5000/api/courses/2

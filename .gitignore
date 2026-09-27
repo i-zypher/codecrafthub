@@ -1,0 +1,4 @@
+venv/
+courses.json
+__pycache__/
+*.tmp
