@@ -4,6 +4,15 @@ A simple REST API for tracking the courses you want to learn. Built with Python 
 
 CodeCraftHub is a learning project. It's small enough to read in one sitting, and it covers the core ideas behind almost every web API: HTTP methods, endpoints, JSON request and response bodies, status codes, validation, and error handling.
 
+The project has two parts, each in its own repository:
+
+| Part | Repository | What it is |
+|---|---|---|
+| **Backend** | [codecrafthub](https://github.com/i-zypher/codecrafthub) (this repo) | The Flask REST API that stores and validates course data |
+| **Frontend** | [codecrafthubfrontend](https://github.com/i-zypher/codecrafthubfrontend) | A browser dashboard for managing courses, built with plain HTML, CSS, and JavaScript |
+
+You can use the API on its own (with curl), or run both parts together and manage courses by clicking instead of typing commands.
+
 ---
 
 ## Table of contents
@@ -12,11 +21,12 @@ CodeCraftHub is a learning project. It's small enough to read in one sitting, an
 2. [Features](#features)
 3. [Installation](#installation)
 4. [Running the application](#running-the-application)
-5. [API endpoints](#api-endpoints)
-6. [Testing](#testing)
-7. [Troubleshooting](#troubleshooting)
-8. [Project structure](#project-structure)
-9. [Limitations and next steps](#limitations-and-next-steps)
+5. [Using the dashboard](#using-the-dashboard)
+6. [API endpoints](#api-endpoints)
+7. [Testing](#testing)
+8. [Troubleshooting](#troubleshooting)
+9. [Project structure](#project-structure)
+10. [Limitations and next steps](#limitations-and-next-steps)
 
 ---
 
@@ -35,7 +45,7 @@ CodeCraftHub lets you keep a list of courses you plan to take. For each course i
 | `status` | One of `Not Started`, `In Progress`, or `Completed` | `"In Progress"` |
 | `created_at` | When the course was added, set automatically | `"2026-09-27T07:39:32"` |
 
-There's no website or user interface. You talk to it by sending HTTP requests, the same way a mobile app or web front end would talk to a real backend.
+The API itself has no user interface. You talk to it by sending HTTP requests, which is exactly what the [dashboard](#using-the-dashboard) does behind the scenes every time you click a button.
 
 ### New to REST APIs? Start here
 
@@ -59,6 +69,9 @@ A **REST API** is a program that lets other programs work with data over HTTP. I
 ## Features
 
 - **Full CRUD** for courses: create, read all, read one, update, and delete
+- **Statistics endpoint** with the total number of courses and a count for each status
+- **Browser dashboard** (separate repo) for managing courses without the command line
+- **CORS enabled** so the dashboard, which runs from a different origin, is allowed to call the API
 - **JSON file storage** in `courses.json`, created automatically on first run
 - **Validation** of every field:
   - all fields required when creating a course
@@ -133,7 +146,7 @@ You'll see `(venv)` at the start of your terminal prompt. You need to activate i
 pip install -r requirements.txt
 ```
 
-This installs Flask and the packages it depends on. Check that it worked:
+This installs Flask, `flask-cors` (which lets the dashboard talk to the API), and the packages they depend on. Check that it worked:
 
 ```bash
 pip show flask
@@ -182,6 +195,91 @@ The server keeps running until you stop it with `Ctrl+C`. While it's running, th
 
 ---
 
+## Using the dashboard
+
+The dashboard is a web page for managing your courses: add, edit, delete, search, and filter, with live stats at the top. It lives in the [codecrafthubfrontend](https://github.com/i-zypher/codecrafthubfrontend) repository.
+
+![CodeCraftHub dashboard](https://raw.githubusercontent.com/i-zypher/codecrafthubfrontend/main/screenshots/dashboard.png)
+
+### How the two parts fit together
+
+```
+┌─────────────────────┐   HTTP requests (fetch)   ┌──────────────────────┐        ┌──────────────┐
+│  Dashboard          │ ────────────────────────▶ │  Flask API (app.py)  │ ─────▶ │ courses.json │
+│  index.html in your │ ◀──────────────────────── │  127.0.0.1:5000      │ ◀───── │              │
+│  browser            │   JSON responses          └──────────────────────┘        └──────────────┘
+└─────────────────────┘
+```
+
+The dashboard never touches `courses.json` directly. Every button click becomes an API request, the same requests you'd send with curl:
+
+| You do this in the dashboard | It sends this request |
+|---|---|
+| Open the page | `GET /api/courses` and `GET /api/courses/stats` |
+| Save a new course | `POST /api/courses` |
+| Save changes to a course | `PUT /api/courses/{id}` |
+| Confirm a delete | `DELETE /api/courses/{id}` |
+
+After every change, the dashboard reloads the list and stats from the API, so what you see is always what the backend actually has.
+
+### Setup (one time)
+
+Clone the frontend repository next to this one:
+
+```bash
+git clone https://github.com/i-zypher/codecrafthubfrontend.git
+```
+
+There's nothing to install. It's three plain files (`index.html`, `style.css`, `script.js`) with no build step.
+
+### Running both parts
+
+1. **Start the API** in a terminal, as described in [Running the application](#running-the-application). Leave it running.
+2. **Open the dashboard** by double-clicking `index.html` in the `codecrafthubfrontend` folder. It opens in your browser and loads your courses.
+
+### What you can do
+
+- **Add a course:** click **New Course**, fill in all four fields, and click **Save Course**.
+- **Edit a course:** click the pencil icon on its card. The form opens with the current values filled in.
+- **Delete a course:** click the trash icon, then confirm.
+- **Search and filter:** type in the search box to match names and descriptions, or pick a status from the dropdown.
+- **Read the stats:** the four boxes at the top show the total and the count for each status, from `GET /api/courses/stats`.
+- **Spot overdue courses:** a course that isn't completed and is past its target date shows a red "Overdue" tag.
+
+If you enter invalid data, the dashboard shows the API's own error message in the form, for example if the status isn't one of the allowed values.
+
+### Confirming the connection
+
+Watch the API terminal while you use the dashboard. Every action shows up as a log line:
+
+```
+127.0.0.1 - - [27/Sep/2026 09:15:02] "GET /api/courses HTTP/1.1" 200 -
+127.0.0.1 - - [27/Sep/2026 09:15:10] "POST /api/courses HTTP/1.1" 201 -
+```
+
+You'll also see some `OPTIONS` requests. Those are the browser's CORS "preflight" checks, asking the API for permission before a `POST`, `PUT`, or `DELETE`. They're expected.
+
+### Why CORS is needed
+
+The dashboard page and the API come from different **origins** (a local file versus `http://127.0.0.1:5000`). By default, browsers block a page from reading responses from a different origin. This security rule is called CORS (Cross-Origin Resource Sharing). These two lines in `app.py` tell the browser the API allows it:
+
+```python
+from flask_cors import CORS
+CORS(app)
+```
+
+Without them, the API still receives every request, but the browser hides the responses from the dashboard, and it shows a "Cannot connect to the API" banner.
+
+### Pointing the dashboard at a different address
+
+If you run the API somewhere other than `http://127.0.0.1:5000`, change this line at the top of `script.js` in the frontend repo:
+
+```javascript
+const API_BASE = "http://127.0.0.1:5000";
+```
+
+---
+
 ## API endpoints
 
 **Base URL:** `http://127.0.0.1:5000`
@@ -194,6 +292,7 @@ The server keeps running until you stop it with `Ctrl+C`. While it's running, th
 | `GET` | `/api/courses/<id>` | Get one course | `200 OK` |
 | `PUT` | `/api/courses/<id>` | Update a course | `200 OK` |
 | `DELETE` | `/api/courses/<id>` | Delete a course | `200 OK` |
+| `GET` | `/api/courses/stats` | Total courses and a count per status | `200 OK` |
 
 > **Windows users:** In PowerShell, type `curl.exe`, not `curl`. Plain `curl` runs a different PowerShell command. In Command Prompt, Git Bash, Mac, or Linux, plain `curl` is fine.
 >
@@ -336,6 +435,31 @@ curl.exe -i -X DELETE http://127.0.0.1:5000/api/courses/1
 
 **Possible errors:** `404` if the course doesn't exist.
 
+### Get statistics
+
+`GET /api/courses/stats`
+
+```bash
+curl.exe -i http://127.0.0.1:5000/api/courses/stats
+```
+
+**Response:** `200 OK`
+
+```json
+{
+  "by_status": {
+    "Completed": 1,
+    "In Progress": 1,
+    "Not Started": 0
+  },
+  "total_courses": 2
+}
+```
+
+Every status is always included, with `0` when no courses have it. That way a client like the dashboard doesn't have to check whether a key exists.
+
+> **Why `stats` doesn't clash with `/api/courses/<id>`:** the ID routes use `<int:course_id>`, which only matches numbers. When Flask sees `/api/courses/stats`, the word `stats` can't be an ID, so it goes to the stats route. With a plain `<course_id>`, Flask could try to treat `stats` as a course ID.
+
 ### Status codes used
 
 | Code | Meaning | When you'll see it |
@@ -410,6 +534,17 @@ Typing JSON directly into a curl command breaks easily on Windows, because Power
 | `400: Request body must be valid JSON` | The JSON is malformed, or the `Content-Type: application/json` header is missing. Check for missing commas or quotes. |
 | `500: Storage error: courses.json contains invalid JSON` | The data file was edited by hand and broken. Fix the JSON, or delete the file to start fresh. **Deleting it removes all courses.** |
 
+### Dashboard problems
+
+| Problem | Fix |
+|---|---|
+| Red **"Cannot connect to the API"** banner | Start the API with `python app.py`, then click **Retry**. |
+| Banner stays even though the API is running | CORS isn't set up. Check `app.py` has `from flask_cors import CORS` and `CORS(app)`, and that `flask-cors` is installed in the virtual environment. Press **F12** and look in the **Console** for a red "blocked by CORS policy" error. |
+| `ModuleNotFoundError: No module named 'flask_cors'` | Activate the virtual environment and run `pip install -r requirements.txt`. |
+| No log lines appear in the API terminal when you use the dashboard | The dashboard is calling a different address. Check `API_BASE` at the top of `script.js`. |
+| Courses load but the stat boxes stay at 0 | The `/api/courses/stats` route is missing from `app.py`. Test it with `curl.exe http://127.0.0.1:5000/api/courses/stats`. |
+| A form error appears when saving | That message comes from the API's validation. Check the field it names. |
+
 ### Reading error messages
 
 When Python shows a long error (a traceback), look at the **last few lines** first. The line starting with `File "...app.py"` points to your code, and the very last line names the error.
@@ -443,14 +578,25 @@ The file is organized top to bottom in the order a request flows through it:
 
 | Section | What it contains |
 |---|---|
-| **Imports and setup** | Loads Flask and creates the `app` object |
+| **Imports and setup** | Loads Flask, creates the `app` object, and enables CORS |
 | **Configuration** | The data file name, allowed statuses, and required fields |
 | **`StorageError`** | A custom error raised when the data file can't be read or written |
 | **JSON file helpers** | `init_data_file()`, `load_courses()`, `save_courses()`, `get_next_id()`, `find_course()` |
 | **Validation** | `validate_course()` checks incoming data, and `get_json_body()` safely reads the request body |
-| **Routes** | One function per endpoint, each marked with `@app.route(...)` |
+| **Routes** | One function per endpoint, each marked with `@app.route(...)`, including the stats route |
 | **Error handlers** | Turn storage errors, unknown URLs, and wrong methods into JSON responses |
 | **Start the server** | The `if __name__ == "__main__":` block that runs `app.run()` |
+
+### The frontend repository
+
+```
+codecrafthubfrontend/
+├── index.html          # Page structure: header, stats bar, course grid, add/edit and delete modals
+├── style.css           # All styling, including the responsive layout and status badge colors
+├── script.js           # Calls the API with fetch() and renders the results
+├── README.md           # Dashboard documentation
+└── screenshots/        # Dashboard screenshots
+```
 
 ### How a request flows
 
@@ -478,12 +624,12 @@ This project is intentionally simple. A few things it doesn't handle, which are 
 
 - **One user at a time.** Every request reads and rewrites the whole JSON file. If two requests save at the same moment, one change can be lost. Real apps use a database like SQLite or PostgreSQL to handle this.
 - **No authentication.** Anyone who can reach the server can change the data. That's fine on your own computer, but not on the internet.
+- **CORS is wide open.** `CORS(app)` allows requests from any website. That's convenient for local development, but a real deployment would allow only the dashboard's own address, for example `CORS(app, origins=["https://your-dashboard.example.com"])`.
 - **Development server only.** Flask's built-in server isn't meant for production. Real deployments use a production server like Gunicorn or Waitress.
 
 Ideas for extending it:
 
 - Filter by status with a query parameter: `GET /api/courses?status=In Progress`
-- Add a stats endpoint that counts courses per status
 - Add a true `PATCH` endpoint and make `PUT` replace the whole course
 - Write automated tests with `pytest` and Flask's test client
 - Swap the JSON file for SQLite
